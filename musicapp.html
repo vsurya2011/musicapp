@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Music Room</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Using a more modern, readable font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-size: cover;
+            background-position: center;
+            transition: background-image 0.5s ease-in-out;
+            color: white;
+        }
+
+        /* Base styles for all screen containers */
+        .screen {
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            padding: 2rem;
+            box-sizing: border-box;
+            background-color: rgba(0, 0, 0, 0.5); /* Dark overlay for readability */
+            text-align: center;
+        }
+
+        .screen.active {
+            display: flex;
+        }
+        
+        /* Glassmorphism effect container for content */
+        .content-box {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 2.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.18);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        /* --- Login Screen Styles --- */
+        #login-screen {
+            background-image: url('https://placehold.co/1920x1080/000000/FFFFFF?text=Login+Background');
+            /* User should replace the above URL with their 'Slide 16_9 - 2 (1).jpg' */
+        }
+        
+        .login-title {
+            font-size: 3.5em;
+            margin-bottom: 2rem;
+            letter-spacing: 4px;
+            font-weight: 300;
+        }
+        
+        .input-group {
+            margin-bottom: 1.5rem;
+            text-align: left;
+        }
+        
+        .input-group label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-size: 1.1rem;
+        }
+
+        .input-group .icon {
+            margin-right: 10px;
+            font-size: 1.3em;
+        }
+        
+        .input-group input {
+            width: 100%;
+            padding: 1rem;
+            border: none;
+            border-radius: 15px;
+            background-color: rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 1em;
+            box-sizing: border-box;
+            outline: none;
+            transition: background-color 0.3s;
+        }
+
+        .input-group input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .input-group input:focus {
+            background-color: rgba(255, 255, 255, 0.4);
+        }
+        
+        /* --- Room Selection Screen Styles --- */
+        #room-selection-screen {
+             background-image: url('https://placehold.co/1920x1080/1a1a1a/FFFFFF?text=Room+Selection+Background');
+             /* User should replace the above URL with their 'cr jr.jpg' */
+        }
+
+        .room-selection-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            width: 100%;
+        }
+
+        /* --- Create & Join Room Styles --- */
+        #create-room-screen, #join-room-screen, #music-player-screen {
+            background-image: url('https://placehold.co/1920x1080/2a2a2a/FFFFFF?text=Music+Room+Background');
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            font-weight: 500;
+            margin-bottom: 2rem;
+        }
+        
+        .room-code-display {
+            background-color: rgba(0, 0, 0, 0.4);
+            padding: 1rem 1.5rem;
+            border-radius: 10px;
+            font-size: 2rem;
+            font-weight: bold;
+            letter-spacing: 5px;
+            margin: 1rem 0;
+            border: 2px dashed rgba(255, 255, 255, 0.4);
+        }
+        
+        #join-code-input {
+            width: 100%;
+            padding: 1rem;
+            border-radius: 15px;
+            text-align: center;
+            font-size: 1.2rem;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            outline: none;
+        }
+
+        /* --- Music Player Styles --- */
+        #song-name {
+            margin-top: 1rem;
+            font-size: 1.2rem;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 90%;
+        }
+        
+        audio {
+            width: 100%;
+            margin-top: 1rem;
+        }
+        
+        /* --- General Button Styles --- */
+        .btn {
+            padding: 1rem 2rem;
+            margin-top: 1rem;
+            border: none;
+            border-radius: 15px;
+            color: #333;
+            font-size: 1.1em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            width: 100%;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+        
+        .btn-primary {
+            background: linear-gradient(to top, #e0e0e0, #ffffff);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn-secondary {
+             background: rgba(255, 255, 255, 0.2);
+             color: white;
+             border: 1px solid rgba(255, 255, 255, 0.4);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.4);
+        }
+        
+        /* Custom file input button */
+        #song-file-label {
+            display: inline-block;
+            background: linear-gradient(to top, #89f7fe, #66a6ff);
+        }
+        
+        #song-file-input {
+            display: none;
+        }
+        
+        /* --- Message Box --- */
+        #message-box {
+            position: fixed;
+            bottom: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 1rem 2rem;
+            background-color: #28a745;
+            color: white;
+            border-radius: 10px;
+            transition: bottom 0.5s ease-in-out;
+            z-index: 1000;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        #message-box.error {
+            background-color: #dc3545;
+        }
+
+        #message-box.show {
+            bottom: 20px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <!-- ======== LOGIN SCREEN ======== -->
+    <div id="login-screen" class="screen active">
+        <div class="content-box">
+            <h1 class="login-title">LOGIN</h1>
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="username">
+                        <span class="icon">👤</span> Username
+                    </label>
+                    <input type="text" id="username" name="username" placeholder="admin" required>
+                </div>
+                <div class="input-group">
+                    <label for="password">
+                        <span class="icon">🔒</span> Password
+                    </label>
+                    <input type="password" id="password" name="password" placeholder="••••••••" required>
+                </div>
+                <button type="submit" class="btn btn-primary">Login Now</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ======== ROOM SELECTION SCREEN ======== -->
+    <div id="room-selection-screen" class="screen">
+        <div class="content-box room-selection-container">
+            <button id="show-create-room-btn" class="btn btn-primary">Create Room</button>
+            <button id="show-join-room-btn" class="btn btn-secondary">Join Room</button>
+        </div>
+    </div>
+
+    <!-- ======== CREATE ROOM SCREEN ======== -->
+    <div id="create-room-screen" class="screen">
+        <div class="content-box">
+            <h2>Create Room</h2>
+            <p>Share this code with your friends:</p>
+            <div id="room-code-display" class="room-code-display"></div>
+            <button id="copy-code-btn" class="btn btn-secondary">Copy Code</button>
+            <label for="song-file-input" id="song-file-label" class="btn btn-primary">Select a Song</label>
+            <input type="file" id="song-file-input" accept="audio/*">
+            <button id="back-to-selection-btn-1" class="btn btn-secondary">Back</button>
+        </div>
+    </div>
+
+    <!-- ======== JOIN ROOM SCREEN ======== -->
+    <div id="join-room-screen" class="screen">
+        <div class="content-box">
+            <h2>Join Room</h2>
+            <p>Enter the code to join a room:</p>
+            <input type="text" id="join-code-input" placeholder="ROOM CODE">
+            <button id="join-room-btn" class="btn btn-primary">Join</button>
+            <button id="back-to-selection-btn-2" class="btn btn-secondary">Back</button>
+        </div>
+    </div>
+
+    <!-- ======== MUSIC PLAYER SCREEN ======== -->
+    <div id="music-player-screen" class="screen">
+        <div class="content-box">
+            <h2>Now Playing</h2>
+            <p>Room: <strong id="player-room-code"></strong></p>
+            <div id="song-name">No song selected</div>
+            <audio id="audio-player" controls></audio>
+             <!-- Important Note -->
+            <p style="font-size: 0.8rem; opacity: 0.7; margin-top: 1rem;">
+                Note: Music sync is not available in this demo. Everyone in the room needs to select the same song to listen together.
+            </p>
+            <button id="leave-room-btn" class="btn btn-secondary">Leave Room</button>
+        </div>
+    </div>
+
+    <!-- Message box for user feedback -->
+    <div id="message-box"></div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- Element References ---
+            const screens = document.querySelectorAll('.screen');
+            const loginForm = document.getElementById('login-form');
+            const showCreateRoomBtn = document.getElementById('show-create-room-btn');
+            const showJoinRoomBtn = document.getElementById('show-join-room-btn');
+            const copyCodeBtn = document.getElementById('copy-code-btn');
+            const songFileInput = document.getElementById('song-file-input');
+            const joinRoomBtn = document.getElementById('join-room-btn');
+            const leaveRoomBtn = document.getElementById('leave-room-btn');
+            const backBtns = [document.getElementById('back-to-selection-btn-1'), document.getElementById('back-to-selection-btn-2')];
+            
+            const usernameInput = document.getElementById('username');
+            const passwordInput = document.getElementById('password');
+            const roomCodeDisplay = document.getElementById('room-code-display');
+            const joinCodeInput = document.getElementById('join-code-input');
+            const audioPlayer = document.getElementById('audio-player');
+            const songNameDisplay = document.getElementById('song-name');
+            const playerRoomCodeDisplay = document.getElementById('player-room-code');
+            const messageBox = document.getElementById('message-box');
+            
+            // --- State ---
+            let currentRoomCode = '';
+
+            // --- Helper Functions ---
+
+            /**
+             * Hides all screens and shows the one with the specified ID.
+             * @param {string} screenId The ID of the screen to show.
+             */
+            function showScreen(screenId) {
+                screens.forEach(screen => {
+                    screen.classList.remove('active');
+                });
+                const activeScreen = document.getElementById(screenId);
+                if (activeScreen) {
+                    activeScreen.classList.add('active');
+                    // Update body background based on the active screen
+                    const bgImage = window.getComputedStyle(activeScreen).backgroundImage;
+                    document.body.style.backgroundImage = bgImage;
+                }
+            }
+            
+             /**
+             * Displays a feedback message to the user.
+             * @param {string} text The message to display.
+             * @param {string} type 'success' or 'error'.
+             */
+            function showMessage(text, type = 'success') {
+                messageBox.textContent = text;
+                messageBox.className = type === 'error' ? 'error' : '';
+                messageBox.classList.add('show');
+                setTimeout(() => {
+                    messageBox.classList.remove('show');
+                }, 3000);
+            }
+
+            /**
+             * Generates a random 6-character alphanumeric room code.
+             * @returns {string} The generated room code.
+             */
+            function generateRoomCode() {
+                return Math.random().toString(36).substring(2, 8).toUpperCase();
+            }
+
+            // --- Event Listeners ---
+
+            // 1. Login Form Submission
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                if (usernameInput.value.trim() === 'admin' && passwordInput.value === '1234567') {
+                    showScreen('room-selection-screen');
+                    showMessage('Login successful!');
+                } else {
+                    showMessage('Invalid username or password.', 'error');
+                }
+            });
+
+            // 2. Navigate to Create Room
+            showCreateRoomBtn.addEventListener('click', () => {
+                currentRoomCode = generateRoomCode();
+                roomCodeDisplay.textContent = currentRoomCode;
+                showScreen('create-room-screen');
+            });
+
+            // 3. Navigate to Join Room
+            showJoinRoomBtn.addEventListener('click', () => {
+                joinCodeInput.value = '';
+                showScreen('join-room-screen');
+            });
+            
+            // 4. Back Buttons
+            backBtns.forEach(btn => {
+                btn.addEventListener('click', () => showScreen('room-selection-screen'));
+            });
+
+            // 5. Copy Room Code
+            copyCodeBtn.addEventListener('click', () => {
+                // A temporary textarea is created to use the document.execCommand('copy')
+                const textArea = document.createElement('textarea');
+                textArea.value = currentRoomCode;
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showMessage('Room code copied to clipboard!');
+                } catch (err) {
+                    showMessage('Failed to copy code.', 'error');
+                }
+                document.body.removeChild(textArea);
+            });
+
+            // 6. Host selects a song
+            songFileInput.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const objectUrl = URL.createObjectURL(file);
+                    audioPlayer.src = objectUrl;
+                    songNameDisplay.textContent = file.name;
+                    playerRoomCodeDisplay.textContent = currentRoomCode;
+                    audioPlayer.removeAttribute('disabled');
+                    showScreen('music-player-screen');
+                    audioPlayer.play();
+                }
+            });
+
+            // 7. Guest joins a room
+            joinRoomBtn.addEventListener('click', () => {
+                const enteredCode = joinCodeInput.value.trim().toUpperCase();
+                if (enteredCode) {
+                    playerRoomCodeDisplay.textContent = enteredCode;
+                    songNameDisplay.textContent = "Waiting for host to play a song...";
+                    // In this version, the guest also has to select the same file.
+                    // The player is enabled for them to do so.
+                    showMessage('Joined room! Please select the same song as the host.');
+                    showScreen('music-player-screen');
+                } else {
+                    showMessage('Please enter a room code.', 'error');
+                }
+            });
+            
+            // 8. Leave the music player room
+            leaveRoomBtn.addEventListener('click', () => {
+                 audioPlayer.pause();
+                 audioPlayer.src = '';
+                 // Reset file input so the same file can be chosen again
+                 songFileInput.value = ''; 
+                 showScreen('room-selection-screen');
+            });
+
+            // --- Initial Setup ---
+            // Set the initial background image from the login screen
+            const initialBg = window.getComputedStyle(document.getElementById('login-screen')).backgroundImage;
+            document.body.style.backgroundImage = initialBg;
+        });
+    </script>
+</body>
+</html>
