@@ -192,30 +192,12 @@
 
 <audio id="mainAudio" crossorigin="anonymous"></audio>
 
-<script type="module">
-    // 1. Import Firebase and Storage SDKs
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-    import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject, listAll } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-storage.js";
-
-    // 2. Initialize Firebase
-    const firebaseConfig = {
-        apiKey: "AIzaSyAo-rZXwNeijuWqRy_l0EhHKW6xmzTvjZ4",
-        authDomain: "musicweb-26987.firebaseapp.com",
-        projectId: "musicweb-26987",
-        storageBucket: "musicweb-26987.firebasestorage.app",
-        messagingSenderId: "645582299685",
-        appId: "1:645582299685:web:c2c38a8b12720956b515cc",
-        measurementId: "G-BCSNLE6Q95"
-    };
-    
-    const app = initializeApp(firebaseConfig);
-    const storage = getStorage(app);
-
-    // Keep standard GitHub sources for the built-in playlists
+<script>
     const SOURCES = {
         tamil: { owner: "vsurya2011", repo: "Music-Room", path: "public/songs/tamil" },
         english: { owner: "vsurya2011", repo: "Music-Room", path: "public/songs/english" },
-        anime: { owner: "MohammedSulthan07", repo: "music_app", path: "Anime songs" }
+        anime: { owner: "MohammedSulthan07", repo: "music_app", path: "Anime songs" },
+        uploaded: { owner: "vsurya2011", repo: "upload-muisc-git", path: "uploaded songs" }
     };
 
     let currentView = { type: 'cat', id: 'tamil' };
@@ -249,64 +231,11 @@
 
     async function fetchSongs() {
         const grid = document.getElementById('songGrid');
-        
-        // 1. If viewing a local playlist
         if (currentView.type === 'playlist') {
             allSongs = playlistData[currentView.id] || [];
             renderSongs();
             return;
         }
-
-        // 2. If viewing Firebase Uploads
-        if (currentView.id === 'uploaded') {
-            try {
-                const songsRef = ref(storage, 'songs');
-                const artRef = ref(storage, 'art');
-
-                // Grab everything from Firebase Storage
-                const [songsList, artList] = await Promise.all([ listAll(songsRef), listAll(artRef) ]);
-
-                // Map artwork for easy matching
-                const artMap = {};
-                for (const item of artList.items) {
-                    const cleanName = item.name.substring(0, item.name.lastIndexOf('.'));
-                    artMap[cleanName] = item;
-                }
-
-                // Build the songs list
-                allSongs = await Promise.all(songsList.items.map(async (item) => {
-                    const cleanName = item.name.replace('.mp3', '');
-                    const url = await getDownloadURL(item);
-                    
-                    let artUrl = 'https://cdn-icons-png.flaticon.com/512/3844/3844724.png';
-                    let artFileName = null;
-
-                    // Attach custom artwork if it exists
-                    if (artMap[cleanName]) {
-                        artFileName = artMap[cleanName].name;
-                        artUrl = await getDownloadURL(artMap[cleanName]);
-                    }
-
-                    return {
-                        fileName: item.name,
-                        artFileName: artFileName,
-                        name: cleanName.replace(/^\d+[\s_]*/, '').replaceAll('_', ' ').replaceAll('%20', ' '),
-                        url: url,
-                        art: artUrl,
-                        sha: null,
-                        artSha: null
-                    };
-                }));
-
-                renderSongs();
-            } catch (e) {
-                console.error(e);
-                grid.innerHTML = '<p style="padding:20px; color:red;">Failed to load from Firebase Cloud.</p>';
-            }
-            return;
-        }
-
-        // 3. If viewing standard GitHub sources (Vercel API)
         const config = SOURCES[currentView.id];
         try {
             const url = `/api/github?owner=${config.owner}&repo=${config.repo}&path=${encodeURIComponent(config.path)}`;
@@ -362,24 +291,20 @@
 
     document.getElementById('imageInput').onchange = function(e) { if(e.target.files[0]) uploadFiles(pendingAudioFile, e.target.files[0]); };
 
-    // New Direct-to-Firebase Upload Function
+    // Sequential Upload to avoid GitHub API SHA conflicts
     async function uploadFiles(audioFile, imageFile) {
         const status = document.getElementById('upStatus');
-        status.innerText = "⏳ Uploading to Firebase...";
+        status.innerText = "⏳ Uploading Song...";
         try {
-            // Upload Audio
-            const audioRef = ref(storage, `songs/${audioFile.name}`);
-            await uploadBytes(audioRef, audioFile);
+            // Upload Audio First
+            await uploadToGitHub(audioFile, audioFile.name);
             
-            // Upload Art (matching the base name of the audio file)
+            // If there's an image, upload it only AFTER the song finishes
             if (imageFile) {
                 status.innerText = "⏳ Uploading Artwork...";
                 const ext = imageFile.name.split('.').pop();
-                const cleanName = audioFile.name.replace('.mp3', '');
-                const newImageFile = new File([imageFile], `${cleanName}.${ext}`, { type: imageFile.type });
-                
-                const artRef = ref(storage, `art/${newImageFile.name}`);
-                await uploadBytes(artRef, newImageFile);
+                const newImageName = audioFile.name.replace('.mp3', '.' + ext);
+                await uploadToGitHub(imageFile, newImageName);
             }
             
             status.innerText = "✅ Success!";
@@ -391,7 +316,40 @@
         setTimeout(() => status.innerText = "", 5000);
     }
 
-    // New Delete from Firebase Function
+    async function uploadToGitHub(file, fileName) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.readAsDataURL(file);
+            reader.onload = async () => {
+                try {
+                    const content = reader.result.split(',')[1];
+                    const targetUrl = `https://api.github.com/repos/vsurya2011/upload-muisc-git/contents/uploaded%20songs/${encodeURIComponent(fileName)}`;
+                    
+                    const res = await fetch('/api/github', {
+                        method: 'PUT',
+                        headers: { 
+                            'Content-Type': 'application/json' 
+                        },
+                        body: JSON.stringify({
+                            targetUrl: targetUrl,
+                            githubBody: { 
+                                message: `Upload: ${fileName}`, 
+                                content: content 
+                            }
+                        })
+                    });
+                    
+                    if (res.ok) resolve();
+                    else {
+                        const errData = await res.json();
+                        reject(errData);
+                    }
+                } catch (e) { reject(e); }
+            };
+            reader.onerror = (error) => reject(error);
+        });
+    }
+
     async function deleteSongFromServer(e, index) {
         e.stopPropagation();
         const song = allSongs[index];
@@ -399,21 +357,25 @@
         const status = document.getElementById('upStatus');
         status.innerText = "🗑️ Deleting...";
         try {
-            // Delete Audio
-            await deleteObject(ref(storage, `songs/${song.fileName}`));
-            
-            // Delete Art if it exists
-            if (song.artFileName) {
-                await deleteObject(ref(storage, `art/${song.artFileName}`));
-            }
-            
+            await removeFromGitHub(song.fileName, song.sha);
+            if (song.artSha) await removeFromGitHub(song.artFileName, song.artSha);
             status.innerText = "✅ Deleted!";
             fetchSongs();
-        } catch (err) { 
-            console.error(err);
-            status.innerText = "❌ Delete Failed"; 
-        }
+        } catch (err) { status.innerText = "❌ Delete Failed"; }
         setTimeout(() => status.innerText = "", 5000);
+    }
+
+    async function removeFromGitHub(fileName, sha) {
+        const targetUrl = `https://api.github.com/repos/vsurya2011/upload-muisc-git/contents/uploaded%20songs/${encodeURIComponent(fileName)}`;
+        const res = await fetch('/api/github', {
+            method: 'DELETE',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                targetUrl: targetUrl,
+                githubBody: { message: `Delete: ${fileName}`, sha: sha }
+            })
+        });
+        if (!res.ok) throw new Error("GitHub Delete Failed");
     }
 
     function playSong(i) {
@@ -528,25 +490,6 @@
 
     function removeFromPlaylist(e, index) { e.stopPropagation(); playlistData[currentView.id].splice(index, 1); savePlaylists(); fetchSongs(); }
     function savePlaylists() { localStorage.setItem('musicRoomPlaylists', JSON.stringify(playlistData)); }
-
-    // Expose functions to the window so HTML 'onclick' attributes can find them
-    window.handleImageChoice = handleImageChoice;
-    window.closePicker = closePicker;
-    window.confirmAddToPlaylist = confirmAddToPlaylist;
-    window.toggleExpandPlayer = toggleExpandPlayer;
-    window.switchView = switchView;
-    window.startUploadFlow = startUploadFlow;
-    window.goBack = goBack;
-    window.renderSongs = renderSongs;
-    window.deleteSongFromServer = deleteSongFromServer;
-    window.removeFromPlaylist = removeFromPlaylist;
-    window.openPicker = openPicker;
-    window.playSong = playSong;
-    window.prevSong = prevSong;
-    window.nextSong = nextSong;
-    window.togglePlay = togglePlay;
-    window.createPlaylist = createPlaylist;
-    window.deletePlaylist = deletePlaylist;
 
     updateUI();
     fetchSongs();
