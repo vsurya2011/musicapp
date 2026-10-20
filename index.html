@@ -238,9 +238,18 @@
         }
         const config = SOURCES[currentView.id];
         try {
-            const url = `/api/github?owner=${config.owner}&repo=${config.repo}&path=${encodeURIComponent(config.path)}`;
+            const url = `/api/github?owner=${encodeURIComponent(config.owner)}&repo=${encodeURIComponent(config.repo)}&path=${encodeURIComponent(config.path)}`;
             const res = await fetch(url);
-            const data = await res.json();
+            const responseText = await res.text();
+            let data;
+            try {
+                data = responseText ? JSON.parse(responseText) : {};
+            } catch {
+                throw new Error(`The server returned an invalid response (HTTP ${res.status}).`);
+            }
+            if (!res.ok) {
+                throw new Error(data?.error || data?.message || `Could not load songs (HTTP ${res.status}).`);
+            }
             const files = Array.isArray(data) ? data : [];
             allSongs = files.filter(f => f.name.endsWith('.mp3')).map(f => {
                 const cleanName = f.name.replace('.mp3', '');
@@ -256,7 +265,10 @@
                 };
             });
             renderSongs();
-        } catch (e) { grid.innerHTML = '<p style="padding:20px; color:red;">Failed to load.</p>'; }
+        } catch (e) {
+            console.error('Failed to load songs:', e);
+            grid.innerHTML = `<p style="padding:20px; color:#ff7070;">Failed to load songs: ${String(e.message || e).replace(/[&<>"]/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[ch]))}</p>`;
+        }
     }
 
     function renderSongs() {
@@ -291,63 +303,106 @@
 
     document.getElementById('imageInput').onchange = function(e) { if(e.target.files[0]) uploadFiles(pendingAudioFile, e.target.files[0]); };
 
-    // Sequential Upload to avoid GitHub API SHA conflicts
+    // GitHub uploads through a serverless API have request-size limits.
+    // Base64 adds about 33% overhead, so keep each source file below 3 MB.
+    // For larger audio files, use direct object storage (e.g. Firebase Storage).
+    const MAX_UPLOAD_FILE_BYTES = 3 * 1024 * 1024;
+
     async function uploadFiles(audioFile, imageFile) {
         const status = document.getElementById('upStatus');
-        status.innerText = "⏳ Uploading Song...";
+
+        if (!audioFile) {
+            status.innerText = "❌ Select an MP3 file first.";
+            return;
+        }
+        if (!audioFile.name.toLowerCase().endsWith('.mp3')) {
+            status.innerText = "❌ Please choose an MP3 audio file.";
+            return;
+        }
+        if (audioFile.size > MAX_UPLOAD_FILE_BYTES) {
+            status.innerText = "❌ MP3 is too large for this API route (max 3 MB).";
+            alert("This upload endpoint has a request-size limit. This MP3 is " +
+                (audioFile.size / 1024 / 1024).toFixed(2) +
+                " MB. Use Firebase Storage or another direct storage upload for larger songs.");
+            return;
+        }
+        if (imageFile && imageFile.size > MAX_UPLOAD_FILE_BYTES) {
+            status.innerText = "❌ Artwork is too large (max 3 MB).";
+            return;
+        }
+
+        status.innerText = "⏳ Uploading song...";
         try {
-            // Upload Audio First
             await uploadToGitHub(audioFile, audioFile.name);
-            
-            // If there's an image, upload it only AFTER the song finishes
+
             if (imageFile) {
-                status.innerText = "⏳ Uploading Artwork...";
+                status.innerText = "⏳ Uploading artwork...";
                 const ext = imageFile.name.split('.').pop();
-                const newImageName = audioFile.name.replace('.mp3', '.' + ext);
+                const newImageName = audioFile.name.replace(/\.mp3$/i, '.' + ext);
                 await uploadToGitHub(imageFile, newImageName);
             }
-            
-            status.innerText = "✅ Success!";
-            if (currentView.id === 'uploaded') fetchSongs();
-        } catch (err) { 
-            console.error(err);
-            status.innerText = "❌ Error uploading"; 
+
+            status.innerText = "✅ Upload complete!";
+            if (currentView.id === 'uploaded') await fetchSongs();
+        } catch (err) {
+            console.error('Upload failed:', err);
+            status.innerText = `❌ ${err.message || 'Upload failed'}`;
         }
-        setTimeout(() => status.innerText = "", 5000);
+        setTimeout(() => {
+            if (status.innerText.startsWith('✅') || status.innerText.startsWith('❌')) {
+                status.innerText = "";
+            }
+        }, 8000);
+    }
+
+    async function readApiResponse(res) {
+        const text = await res.text();
+        let data;
+        try {
+            data = text ? JSON.parse(text) : {};
+        } catch {
+            data = { error: text || `Server returned HTTP ${res.status}` };
+        }
+        if (!res.ok) {
+            let message = data.error || data.message || `Request failed (HTTP ${res.status})`;
+            if (res.status === 413) {
+                message = "Upload too large for the serverless API limit (HTTP 413). Use direct file storage for larger files.";
+            }
+            throw new Error(message);
+        }
+        return data;
     }
 
     async function uploadToGitHub(file, fileName) {
-        return new Promise((resolve, reject) => {
+        const content = await new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.readAsDataURL(file);
-            reader.onload = async () => {
-                try {
-                    const content = reader.result.split(',')[1];
-                    const targetUrl = `https://api.github.com/repos/vsurya2011/upload-muisc-git/contents/uploaded%20songs/${encodeURIComponent(fileName)}`;
-                    
-                    const res = await fetch('/api/github', {
-                        method: 'PUT',
-                        headers: { 
-                            'Content-Type': 'application/json' 
-                        },
-                        body: JSON.stringify({
-                            targetUrl: targetUrl,
-                            githubBody: { 
-                                message: `Upload: ${fileName}`, 
-                                content: content 
-                            }
-                        })
-                    });
-                    
-                    if (res.ok) resolve();
-                    else {
-                        const errData = await res.json();
-                        reject(errData);
-                    }
-                } catch (e) { reject(e); }
+            reader.onload = () => {
+                const result = String(reader.result || '');
+                const comma = result.indexOf(',');
+                if (comma < 0) {
+                    reject(new Error('Could not read the selected file.'));
+                    return;
+                }
+                resolve(result.slice(comma + 1));
             };
-            reader.onerror = (error) => reject(error);
+            reader.onerror = () => reject(new Error('Failed to read the selected file.'));
+            reader.readAsDataURL(file);
         });
+
+        const targetUrl = `https://api.github.com/repos/vsurya2011/upload-muisc-git/contents/uploaded%20songs/${encodeURIComponent(fileName)}`;
+        const res = await fetch('/api/github', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                targetUrl,
+                githubBody: {
+                    message: `Upload: ${fileName}`,
+                    content
+                }
+            })
+        });
+
+        await readApiResponse(res);
     }
 
     async function deleteSongFromServer(e, index) {
@@ -370,12 +425,12 @@
         const res = await fetch('/api/github', {
             method: 'DELETE',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                targetUrl: targetUrl,
-                githubBody: { message: `Delete: ${fileName}`, sha: sha }
+            body: JSON.stringify({
+                targetUrl,
+                githubBody: { message: `Delete: ${fileName}`, sha }
             })
         });
-        if (!res.ok) throw new Error("GitHub Delete Failed");
+        await readApiResponse(res);
     }
 
     function playSong(i) {
